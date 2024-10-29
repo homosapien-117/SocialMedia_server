@@ -1,0 +1,10 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const notificationController_1 = require("../controller/notificationController");
+const jwtAuth_1 = require("../middleware/jwtAuth");
+const router = (0, express_1.Router)();
+router.get("/notifications", jwtAuth_1.authenticateToken, notificationController_1.getNotifications);
+router.post("/approve-follow/:notificationId", jwtAuth_1.authenticateToken, notificationController_1.approveFollowRequest);
+router.post("/decline-follow/:notificationId", jwtAuth_1.authenticateToken, notificationController_1.declineFollowRequest);
+exports.default = router;
