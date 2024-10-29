@@ -128,6 +128,7 @@ const sendMessage = (req, res) => __awaiter(void 0, void 0, void 0, function* ()
     const senderId = req.body.senderId;
     const image = (_a = req.files) === null || _a === void 0 ? void 0 : _a.image;
     const document = (_b = req.files) === null || _b === void 0 ? void 0 : _b.document;
+    const chat = yield chatModel_1.default.findById(chatId);
     try {
         let imageUrl = "";
         let documentUrl = "";
@@ -143,13 +144,12 @@ const sendMessage = (req, res) => __awaiter(void 0, void 0, void 0, function* ()
                 imageUrl = result.secure_url;
             }
         }
-        // Handle document upload
         if (document) {
-            console.log("Document file to upload:", document); // Debug: Log document file details
+            console.log("Document file to upload:", document);
             if (Array.isArray(document)) {
                 documentUrl = yield Promise.all(document.map((doc) => __awaiter(void 0, void 0, void 0, function* () {
                     const result = yield cloudinary_1.default.v2.uploader.upload(doc.filepath, {
-                        resource_type: "raw", // Specify raw file type for non-image files
+                        resource_type: "raw",
                     });
                     console.log(result);
                     documentUrl = result.secure_url;
@@ -175,6 +175,10 @@ const sendMessage = (req, res) => __awaiter(void 0, void 0, void 0, function* ()
             isDeleted: false,
         });
         yield newMessage.save();
+        if (newMessage) {
+            chat.lastMessage.messageId = newMessage._id;
+        }
+        yield chat.save();
         res.status(201).json(newMessage);
     }
     catch (error) {
@@ -230,14 +234,21 @@ const createOrGetChat = (req, res) => __awaiter(void 0, void 0, void 0, function
 });
 exports.createOrGetChat = createOrGetChat;
 const getMessagesByChatId = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a;
     const { chatId } = req.params;
     console.log(`chatID ${chatId}`);
+    const CurrentuserId = (_a = req.currentUser) === null || _a === void 0 ? void 0 : _a.id;
     try {
         const messages = yield messageModel_1.default.find({ chatId }).sort({ timeStamp: 1 });
-        console.log(messages);
         if (!messages) {
             return res.status(404).json({ message: "Messages not found" });
         }
+        yield Promise.all(messages.map((msg) => __awaiter(void 0, void 0, void 0, function* () {
+            if (msg.senderId.toString() !== CurrentuserId && !msg.ReadStatus) {
+                msg.ReadStatus = true;
+                yield msg.save();
+            }
+        })));
         res.status(200).json(messages);
     }
     catch (error) {
@@ -252,15 +263,20 @@ const chats = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
         const currentUserId = (_a = req.currentUser) === null || _a === void 0 ? void 0 : _a.id;
         const chats = yield chatModel_1.default.find({
             participants: currentUserId,
-        }).populate("participants", "_id username profilePicture", "users");
+        })
+            .populate("lastMessage.messageId", "senderName timeStamp", "Message")
+            .populate("participants", "_id username profilePicture", "users");
         const users = chats
             .map((chat) => {
+            var _a;
+            const lastMessage = ((_a = chat.lastMessage) === null || _a === void 0 ? void 0 : _a.messageId) || null;
             if (chat.groupName) {
                 return chat;
             }
             else {
                 const participants = chat.participants;
-                return participants.find((participant) => participant._id.toString() !== currentUserId);
+                const otherUser = participants.find((participant) => participant._id.toString() !== currentUserId);
+                return Object.assign(Object.assign({}, otherUser === null || otherUser === void 0 ? void 0 : otherUser.toObject()), { chatId: chat._id, lastMessage });
             }
         })
             .filter(Boolean);

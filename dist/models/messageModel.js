@@ -59,8 +59,6 @@ const messageSchema = new mongoose_1.Schema({
         required: true,
         default: () => new Date().getTime(),
     },
-    status: { type: Boolean, required: true, default: false },
-    readAt: { type: Date },
-    isDeleted: { type: Boolean, required: true, default: false },
+    ReadStatus: { type: Boolean, required: true, default: false },
 });
 exports.default = mongoose_1.default.model('Message', messageSchema);
